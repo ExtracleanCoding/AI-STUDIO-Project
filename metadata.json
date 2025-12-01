@@ -1,0 +1,5 @@
+{
+  "name": "Ray Ryan Management System",
+  "description": "A comprehensive, serverless, single-page application for small service-based businesses like driving schools. It provides a unified dashboard to manage scheduling, customers, billing, and analytics, running entirely in the browser using localStorage.",
+  "requestFramePermissions": []
+}
