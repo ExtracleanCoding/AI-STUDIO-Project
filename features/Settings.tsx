@@ -1,13 +1,10 @@
-
 import React, { useState } from 'react';
 import { useAppContext } from '../hooks/useAppContext';
-import { useGoogleCalendar } from '../hooks/useGoogleCalendar';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from '../components/ui';
 
 export const SettingsView: React.FC = () => {
     const { state, dispatch } = useAppContext();
     const [settings, setSettings] = useState(state.settings);
-    const { isApiReady, isSignedIn, currentUser, signIn, signOut } = useGoogleCalendar();
 
     const handleSave = () => {
         dispatch({ type: 'UPDATE_SETTINGS', payload: settings });
@@ -35,8 +32,10 @@ export const SettingsView: React.FC = () => {
                     // Add validation here in a real app
                     dispatch({ type: 'SET_STATE', payload: importedState });
                     alert('Data imported successfully!');
-                } catch (err) {
-                    alert('Error importing data. The file might be corrupted.');
+                    window.location.reload();
+                } catch (error) {
+                    alert('Error importing data. Please check the file format.');
+                    console.error("Import error:", error);
                 }
             };
             reader.readAsText(file);
@@ -44,27 +43,24 @@ export const SettingsView: React.FC = () => {
     }
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-        const { name, value, type } = e.target;
-        if (type === 'checkbox') {
-             setSettings({ ...settings, [name]: (e.target as HTMLInputElement).checked });
-        } else {
-             setSettings({ ...settings, [name]: value });
-        }
+        const { name, value, type, checked } = e.target as HTMLInputElement;
+        setSettings(prev => ({...prev, [name]: type === 'checkbox' ? checked : value }));
     }
-
+    
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold">Settings</h1>
+            
             <Card>
                 <CardHeader>
-                    <CardTitle>Business Details</CardTitle>
+                    <CardTitle>Business Information</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div>
                         <Label htmlFor="businessName">Business Name</Label>
                         <Input id="businessName" name="businessName" value={settings.businessName} onChange={handleChange} />
                     </div>
-                    <div>
+                     <div>
                         <Label htmlFor="businessAddress">Business Address</Label>
                         <Input id="businessAddress" name="businessAddress" value={settings.businessAddress} onChange={handleChange} />
                     </div>
@@ -72,73 +68,65 @@ export const SettingsView: React.FC = () => {
             </Card>
 
             <Card>
-                 <CardHeader>
-                    <CardTitle>Google Calendar Integration</CardTitle>
+                <CardHeader>
+                    <CardTitle>Communication Templates</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                     <div className="flex items-center">
-                        <input id="googleCalendarEnabled" name="googleCalendarEnabled" type="checkbox" checked={settings.googleCalendarEnabled} onChange={handleChange} className="h-4 w-4 text-brand-start focus:ring-brand-start border-gray-300 rounded" />
-                        <Label htmlFor="googleCalendarEnabled" className="ml-2 mb-0">Enable Google Calendar Sync</Label>
+                     <div>
+                        <Label htmlFor="emailTemplate">Email Template</Label>
+                        <Textarea id="emailTemplate" name="emailTemplate" value={settings.emailTemplate} onChange={handleChange} />
+                        <p className="text-xs text-gray-500 mt-1">Placeholders: {`{customerName}`}, {`{bookingDate}`}, {`{bookingTime}`}, {`{businessName}`}</p>
                     </div>
-                    {settings.googleCalendarEnabled && (
-                        <>
-                             <div>
-                                <Label htmlFor="googleCalendarApiKey">Google Calendar API Key</Label>
-                                <Input id="googleCalendarApiKey" name="googleCalendarApiKey" type="password" value={settings.googleCalendarApiKey} onChange={handleChange} />
-                            </div>
-                            <div>
-                                <Label htmlFor="googleCalendarClientId">Google Calendar Client ID</Label>
-                                <Input id="googleCalendarClientId" name="googleCalendarClientId" type="password" value={settings.googleCalendarClientId} onChange={handleChange} />
-                            </div>
-                            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-between">
-                                <div>
-                                    <p className="text-sm font-medium">Authentication Status</p>
-                                    {!isApiReady ? <p className="text-sm text-gray-500">Initializing...</p> : 
-                                     isSignedIn ? <p className="text-sm text-green-600 dark:text-green-400">Signed in as {currentUser}</p> :
-                                     <p className="text-sm text-yellow-600 dark:text-yellow-400">Not signed in</p>
-                                    }
-                                </div>
-                                {isApiReady && (isSignedIn ? <Button variant="secondary" onClick={signOut}>Sign Out</Button> : <Button onClick={signIn}>Sign In with Google</Button>)}
-                            </div>
-                        </>
-                    )}
+                    <div>
+                        <Label htmlFor="smsTemplate">SMS Template</Label>
+                        <Textarea id="smsTemplate" name="smsTemplate" value={settings.smsTemplate} onChange={handleChange} />
+                    </div>
                 </CardContent>
             </Card>
 
-            {/* FIX: Removed the Gemini API Key section to comply with guidelines requiring the key to be managed via environment variables. */}
-            
             <Card>
                 <CardHeader>
-                    <CardTitle>Message Templates</CardTitle>
+                    <CardTitle>Google Calendar Integration</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div>
-                        <Label htmlFor="emailTemplate">Email Template</Label>
-                        <Textarea id="emailTemplate" name="emailTemplate" value={settings.emailTemplate} onChange={handleChange} rows={5} />
+                    <div className="flex items-center space-x-2">
+                        <input
+                            type="checkbox"
+                            id="googleCalendarEnabled"
+                            name="googleCalendarEnabled"
+                            checked={settings.googleCalendarEnabled}
+                            onChange={handleChange}
+                            className="h-4 w-4 text-brand-start focus:ring-brand-start border-gray-300 rounded"
+                        />
+                        <Label htmlFor="googleCalendarEnabled" className="mb-0">
+                            Enable "Add to Google Calendar" button on bookings
+                        </Label>
                     </div>
-                     <div>
-                        <Label htmlFor="smsTemplate">SMS Template</Label>
-                        <Textarea id="smsTemplate" name="smsTemplate" value={settings.smsTemplate} onChange={handleChange} rows={2} />
-                    </div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        This uses a simple link to open a pre-filled event in your browser. No API keys or sign-in required.
+                    </p>
                 </CardContent>
             </Card>
-            
-            <div className="flex justify-end">
-                <Button onClick={handleSave}>Save All Settings</Button>
-            </div>
 
             <Card>
                 <CardHeader>
                     <CardTitle>Data Management</CardTitle>
                 </CardHeader>
-                <CardContent className="flex space-x-4">
-                    <Button onClick={handleExport}>Export Data</Button>
-                    <Label htmlFor="import-file" className="cursor-pointer inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600">
-                      Import Data
-                      <Input id="import-file" type="file" className="hidden" accept=".json" onChange={handleImport} />
-                    </Label>
+                <CardContent className="space-y-4">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Backup all your application data to a JSON file or restore from a previous backup.
+                    </p>
+                    <div className="flex space-x-2">
+                        <Button variant="secondary" onClick={handleExport}>Export Data</Button>
+                        <Button variant="secondary" onClick={() => document.getElementById('import-input')?.click()}>Import Data</Button>
+                        <input type="file" id="import-input" className="hidden" accept=".json" onChange={handleImport} />
+                    </div>
                 </CardContent>
             </Card>
+
+            <div className="flex justify-end">
+                <Button onClick={handleSave}>Save All Settings</Button>
+            </div>
         </div>
     );
 };

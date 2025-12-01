@@ -137,8 +137,6 @@ const getInitialState = (): AppState => {
       emailTemplate: `Hi {customerName},\n\nThis is a confirmation for your booking on {bookingDate} at {bookingTime}.\n\nThanks,\n{businessName}`,
       smsTemplate: `Booking confirmation: {bookingDate} @ {bookingTime} with {businessName}.`,
       googleCalendarEnabled: false,
-      googleCalendarApiKey: '',
-      googleCalendarClientId: '',
     },
   };
 };

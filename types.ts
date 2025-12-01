@@ -72,7 +72,6 @@ export interface Booking extends Identifiable {
   pickupLocation?: string;
   status: BookingStatus;
   paymentStatus: PaymentStatus;
-  googleEventId?: string;
   // Tour specific
   groupSize?: number;
   participants?: string[];
@@ -114,8 +113,6 @@ export interface Settings {
   emailTemplate: string;
   smsTemplate: string;
   googleCalendarEnabled: boolean;
-  googleCalendarApiKey: string;
-  googleCalendarClientId: string;
 }
 
 export type AppEntity = Customer | Staff | Resource | Service | Booking | BlockedPeriod | Expense | Transaction;

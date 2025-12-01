@@ -13,12 +13,11 @@ const BookingModal: React.FC<{
     existingBooking?: Booking | null;
 }> = ({ isOpen, onClose, bookingDate, existingBooking = null }) => {
     const { state, dispatch } = useAppContext();
-    const { isSignedIn, addSingleBookingToCalendar } = useGoogleCalendar();
+    const { openBookingInGoogleCalendar } = useGoogleCalendar();
     const [booking, setBooking] = useState<Partial<Booking>>({});
     const [isRecurring, setIsRecurring] = useState(false);
     const [recurringType, setRecurringType] = useState<'daily' | 'weekly' | 'bi-weekly'>('weekly');
     const [recurringCount, setRecurringCount] = useState(4);
-    const [isSyncing, setIsSyncing] = useState(false);
 
     useEffect(() => {
         if (existingBooking) {
@@ -144,14 +143,9 @@ const BookingModal: React.FC<{
         }
     }
 
-    const handleAddToGoogleCalendar = async () => {
+    const handleAddToGoogleCalendar = () => {
         if (booking.id) {
-            setIsSyncing(true);
-            const updatedBooking = await addSingleBookingToCalendar(booking as Booking);
-            if (updatedBooking) {
-                setBooking(updatedBooking);
-            }
-            setIsSyncing(false);
+            openBookingInGoogleCalendar(booking as Booking);
         }
     };
 
@@ -159,13 +153,12 @@ const BookingModal: React.FC<{
         <div className="flex justify-between w-full">
             <div className="flex items-center space-x-2">
                 {booking.id && <Button variant="danger" onClick={handleDelete}>Delete</Button>}
-                {booking.id && state.settings.googleCalendarEnabled && isSignedIn && (
+                {booking.id && state.settings.googleCalendarEnabled && (
                     <Button 
                         variant="secondary" 
                         onClick={handleAddToGoogleCalendar} 
-                        disabled={isSyncing}
                     >
-                        {isSyncing ? 'Syncing...' : booking.googleEventId ? 'Update in Google Calendar' : 'Add to Google Calendar'}
+                        Add to Google Calendar
                     </Button>
                 )}
             </div>
@@ -362,9 +355,6 @@ const TimelineView: React.FC<{ currentDate: Date; viewMode: 'week' | 'day'; open
 
 
 export const CalendarView: React.FC = () => {
-    const { state } = useAppContext();
-    const { isSignedIn, syncBookings } = useGoogleCalendar();
-    const [isSyncing, setIsSyncing] = useState(false);
     const [viewMode, setViewMode] = useState<CalendarViewMode>('month');
     const [currentDate, setCurrentDate] = useState(new Date());
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -397,12 +387,6 @@ export const CalendarView: React.FC = () => {
         setCurrentDate(newDate);
     }
     
-    const handleSync = async () => {
-        setIsSyncing(true);
-        await syncBookings();
-        setIsSyncing(false);
-    }
-
     const title = useMemo(() => {
         if (viewMode === 'month') return currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
         if (viewMode === 'day') return currentDate.toLocaleString('default', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -425,15 +409,9 @@ export const CalendarView: React.FC = () => {
                  <Tabs
                     tabs={[{id: 'month', label: 'Month'}, {id: 'week', label: 'Week'}, {id: 'day', label: 'Day'}]}
                     activeTab={viewMode}
-                    // FIX: Wrapped setViewMode in a lambda to ensure correct type inference for the onTabClick handler.
                     onTabClick={(tabId) => setViewMode(tabId)}
                 />
                 <div className="flex space-x-2">
-                    {state.settings.googleCalendarEnabled && (
-                        <Button variant="secondary" onClick={handleSync} disabled={!isSignedIn || isSyncing}>
-                            {isSyncing ? 'Syncing...' : 'Sync with Google'}
-                        </Button>
-                    )}
                     <Button variant="secondary" onClick={() => setIsBlockModalOpen(true)}>Block Time</Button>
                     <Button onClick={() => openModalForNew(new Date())}>Add Booking</Button>
                 </div>
