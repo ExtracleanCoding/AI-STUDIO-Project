@@ -11,7 +11,8 @@ const BookingModal: React.FC<{
     onClose: () => void;
     bookingDate: Date;
     existingBooking?: Booking | null;
-}> = ({ isOpen, onClose, bookingDate, existingBooking = null }) => {
+    checkConflict: (booking: Partial<Booking>) => boolean;
+}> = ({ isOpen, onClose, bookingDate, existingBooking = null, checkConflict }) => {
     const { state, dispatch } = useAppContext();
     const { openBookingInGoogleCalendar } = useGoogleCalendar();
     const [booking, setBooking] = useState<Partial<Booking>>({});
@@ -62,31 +63,6 @@ const BookingModal: React.FC<{
             }
         }
     };
-
-    const checkConflict = (checkBooking: Partial<Booking>): boolean => {
-         const conflict = state.bookings.find(b => {
-            if (b.id === checkBooking.id) return false;
-            if (b.staffId !== checkBooking.staffId && b.resourceId !== checkBooking.resourceId) return false;
-            
-            const newStart = new Date(checkBooking.start!).getTime();
-            const newEnd = new Date(checkBooking.end!).getTime();
-            const existingStart = new Date(b.start).getTime();
-            const existingEnd = new Date(b.end).getTime();
-
-            return newStart < existingEnd && newEnd > existingStart;
-        });
-
-        const blocked = state.blockedPeriods.find(bp => {
-            if (bp.staffId !== checkBooking.staffId) return false;
-            const newStart = new Date(checkBooking.start!).getTime();
-            const newEnd = new Date(checkBooking.end!).getTime();
-            const blockedStart = new Date(bp.start).getTime();
-            const blockedEnd = new Date(bp.end).getTime();
-            return newStart < blockedEnd && newEnd > blockedStart;
-        });
-
-        return !!conflict || !!blocked;
-    }
 
     const handleSubmit = () => {
         if (!booking.customerId || !booking.staffId || !booking.serviceId || !booking.start || !booking.end) {
@@ -241,8 +217,16 @@ const getBookingColor = (booking: Booking): 'blue' | 'green' | 'gray' => {
     return 'blue';
 }
 
-const MonthView: React.FC<{ currentDate: Date, openModalForNew: (d: Date) => void, openModalForEdit: (b: Booking) => void }> = ({ currentDate, openModalForNew, openModalForEdit }) => {
+const MonthView: React.FC<{ 
+    currentDate: Date;
+    draggedBookingId: string | null;
+    openModalForNew: (d: Date) => void; 
+    openModalForEdit: (b: Booking) => void;
+    handleDragStart: (e: React.DragEvent, bookingId: string) => void;
+    handleDrop: (e: React.DragEvent, date: Date) => void;
+}> = ({ currentDate, draggedBookingId, openModalForNew, openModalForEdit, handleDragStart, handleDrop }) => {
     const { state } = useAppContext();
+    const [dragOverDate, setDragOverDate] = useState<string | null>(null);
     
     const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
@@ -273,12 +257,25 @@ const MonthView: React.FC<{ currentDate: Date, openModalForNew: (d: Date) => voi
                         const dayBookings = (bookingsByDate[dateKey] || []).sort((a,b) => new Date(a.start).getTime() - new Date(b.start).getTime());
                         const isToday = day.toDateString() === new Date().toDateString();
                         return (
-                            <div key={dateKey} className="border-r border-b dark:border-gray-700 p-1 relative group overflow-y-auto">
+                            <div 
+                                key={dateKey} 
+                                className={`border-r border-b dark:border-gray-700 p-1 relative group overflow-y-auto transition-colors ${dragOverDate === dateKey ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
+                                onDragOver={(e) => e.preventDefault()}
+                                onDragEnter={() => setDragOverDate(dateKey)}
+                                onDragLeave={() => setDragOverDate(null)}
+                                onDrop={(e) => { handleDrop(e, day); setDragOverDate(null); }}
+                            >
                                 <span className={`text-sm ${isToday ? 'bg-brand-start text-white rounded-full px-2' : ''}`}>{day.getDate()}</span>
                                 <Button variant="ghost" className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 p-1 h-auto text-xs" onClick={() => openModalForNew(day)}>+</Button>
                                 <div className="mt-1 space-y-1">
                                     {dayBookings.map(booking => (
-                                        <div key={booking.id} onClick={() => openModalForEdit(booking)} className="cursor-pointer">
+                                        <div 
+                                            key={booking.id} 
+                                            draggable 
+                                            onDragStart={(e) => handleDragStart(e, booking.id)}
+                                            onClick={() => openModalForEdit(booking)} 
+                                            className={`cursor-grab transition-opacity ${draggedBookingId === booking.id ? 'opacity-30' : ''}`}
+                                        >
                                             <Badge color={getBookingColor(booking)}>
                                                 {new Date(booking.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} {state.customers.find(c => c.id === booking.customerId)?.name}
                                             </Badge>
@@ -294,9 +291,18 @@ const MonthView: React.FC<{ currentDate: Date, openModalForNew: (d: Date) => voi
     );
 };
 
-const TimelineView: React.FC<{ currentDate: Date; viewMode: 'week' | 'day'; openModalForNew: (d: Date) => void; openModalForEdit: (b: Booking) => void; }> = ({ currentDate, viewMode, openModalForNew, openModalForEdit }) => {
+const TimelineView: React.FC<{ 
+    currentDate: Date; 
+    viewMode: 'week' | 'day'; 
+    draggedBookingId: string | null;
+    openModalForNew: (d: Date) => void; 
+    openModalForEdit: (b: Booking) => void; 
+    handleDragStart: (e: React.DragEvent, bookingId: string) => void;
+    handleDrop: (e: React.DragEvent, date: Date, timeInMinutes?: number) => void;
+}> = ({ currentDate, viewMode, draggedBookingId, openModalForNew, openModalForEdit, handleDragStart, handleDrop }) => {
     const { state } = useAppContext();
     const { customers } = state;
+    const [dragOverDay, setDragOverDay] = useState<string | null>(null);
 
     const days = useMemo(() => {
         if (viewMode === 'day') return [currentDate];
@@ -312,6 +318,18 @@ const TimelineView: React.FC<{ currentDate: Date; viewMode: 'week' | 'day'; open
         const height = (end.getTime() - start.getTime()) / (1000 * 60) / (16 * 60) * 100;
         return { top: `${top}%`, height: `${height}%` };
     };
+    
+    const onDropHandler = (e: React.DragEvent, day: Date) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const dropY = e.clientY - rect.top;
+        const totalHeight = rect.height;
+        const totalMinutesInView = 16 * 60;
+        const minutesFromStart = (dropY / totalHeight) * totalMinutesInView;
+        const snappedMinutes = Math.round(minutesFromStart / 15) * 15;
+        const finalMinutes = (6 * 60) + snappedMinutes; // Add offset from 6am
+        handleDrop(e, day, finalMinutes);
+        setDragOverDay(null);
+    };
 
     return (
         <Card className="h-[80vh] flex flex-col">
@@ -326,11 +344,25 @@ const TimelineView: React.FC<{ currentDate: Date; viewMode: 'week' | 'day'; open
                     {timeSlots.map(time => <div key={time} className="h-16 text-right pr-2 text-xs text-gray-500 border-r dark:border-gray-700">{time}</div>)}
                 </div>
                 <div className={`relative grid ${viewMode === 'week' ? 'grid-cols-7' : 'grid-cols-1'}`}>
-                    {days.map((day, dayIndex) => (
-                        <div key={day.toISOString()} className="relative border-r dark:border-gray-700">
+                    {days.map(day => (
+                        <div 
+                            key={day.toISOString()} 
+                            className={`relative border-r dark:border-gray-700 transition-colors ${dragOverDay === day.toDateString() ? 'bg-blue-100 dark:bg-blue-900' : ''}`}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDragEnter={() => setDragOverDay(day.toDateString())}
+                            onDragLeave={() => setDragOverDay(null)}
+                            onDrop={(e) => onDropHandler(e, day)}
+                        >
                             {timeSlots.map(time => <div key={time} className="h-16 border-b dark:border-gray-700"></div>)}
                             {state.bookings.filter(b => new Date(b.start).toDateString() === day.toDateString()).map(b => (
-                                <div key={b.id} style={getEventStyle(new Date(b.start), new Date(b.end))} onClick={() => openModalForEdit(b)} className="absolute w-full px-1 cursor-pointer">
+                                <div 
+                                    key={b.id} 
+                                    draggable 
+                                    onDragStart={(e) => handleDragStart(e, b.id)}
+                                    style={getEventStyle(new Date(b.start), new Date(b.end))} 
+                                    onClick={() => openModalForEdit(b)} 
+                                    className={`absolute w-full px-1 cursor-grab transition-opacity ${draggedBookingId === b.id ? 'opacity-30' : ''}`}
+                                >
                                     <div className={`p-1 rounded text-white text-xs overflow-hidden h-full bg-blue-600`}>
                                         <p className="font-bold">{customers.find(c => c.id === b.customerId)?.name}</p>
                                         <p>{new Date(b.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
@@ -355,13 +387,87 @@ const TimelineView: React.FC<{ currentDate: Date; viewMode: 'week' | 'day'; open
 
 
 export const CalendarView: React.FC = () => {
+    const { state, dispatch } = useAppContext();
     const [viewMode, setViewMode] = useState<CalendarViewMode>('month');
     const [currentDate, setCurrentDate] = useState(new Date());
     const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
     const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+    const [draggedBookingId, setDraggedBookingId] = useState<string | null>(null);
 
+    const checkConflict = (checkBooking: Partial<Booking>): boolean => {
+         const conflict = state.bookings.find(b => {
+            if (b.id === checkBooking.id) return false;
+            // A conflict occurs if the same staff OR same resource is booked
+            if (b.staffId !== checkBooking.staffId && b.resourceId !== checkBooking.resourceId) return false;
+            if (checkBooking.staffId && b.staffId !== checkBooking.staffId) return false;
+            if (checkBooking.resourceId && b.resourceId !== checkBooking.resourceId) return false;
+            
+            const newStart = new Date(checkBooking.start!).getTime();
+            const newEnd = new Date(checkBooking.end!).getTime();
+            const existingStart = new Date(b.start).getTime();
+            const existingEnd = new Date(b.end).getTime();
+
+            return newStart < existingEnd && newEnd > existingStart;
+        });
+
+        const blocked = state.blockedPeriods.find(bp => {
+            if (bp.staffId !== checkBooking.staffId) return false;
+            const newStart = new Date(checkBooking.start!).getTime();
+            const newEnd = new Date(checkBooking.end!).getTime();
+            const blockedStart = new Date(bp.start).getTime();
+            const blockedEnd = new Date(bp.end).getTime();
+            return newStart < blockedEnd && newEnd > blockedStart;
+        });
+
+        return !!conflict || !!blocked;
+    }
+
+    const handleDragStart = (e: React.DragEvent, bookingId: string) => {
+        e.dataTransfer.setData('bookingId', bookingId);
+        setDraggedBookingId(bookingId);
+    };
+
+    const handleDrop = (e: React.DragEvent, newDate: Date, timeInMinutes?: number) => {
+        e.preventDefault();
+        const bookingId = e.dataTransfer.getData('bookingId');
+        const originalBooking = state.bookings.find(b => b.id === bookingId);
+        if (!originalBooking) return;
+
+        const originalStartDate = new Date(originalBooking.start);
+        const duration = new Date(originalBooking.end).getTime() - originalStartDate.getTime();
+        
+        const newStartDate = new Date(newDate);
+        if(timeInMinutes !== undefined) {
+             newStartDate.setHours(Math.floor(timeInMinutes / 60), timeInMinutes % 60, 0, 0);
+        } else {
+            // Preserve original time if only date is changed (Month View)
+            newStartDate.setHours(originalStartDate.getHours(), originalStartDate.getMinutes(), 0, 0);
+        }
+        const newEndDate = new Date(newStartDate.getTime() + duration);
+        
+        const isCopy = e.altKey;
+        const tempBooking = {
+            ...originalBooking,
+            id: isCopy ? generateId() : originalBooking.id,
+            start: newStartDate.toISOString(),
+            end: newEndDate.toISOString()
+        };
+
+        if(checkConflict(tempBooking)) {
+            alert('This booking conflicts with an existing event or blocked period.');
+        } else {
+            if(isCopy) {
+                const { id, ...newBookingData } = tempBooking;
+                dispatch({ type: 'ADD_ITEM', payload: { entity: 'bookings', data: newBookingData as Omit<Booking, 'id'> }});
+            } else {
+                dispatch({ type: 'UPDATE_ITEM', payload: { entity: 'bookings', data: tempBooking }});
+            }
+        }
+        setDraggedBookingId(null);
+    };
+    
     const openModalForNew = (date: Date) => {
         setSelectedDate(date);
         setSelectedBooking(null);
@@ -398,7 +504,7 @@ export const CalendarView: React.FC = () => {
     }, [currentDate, viewMode]);
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4" onDragEnd={() => setDraggedBookingId(null)}>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-2 sm:space-y-0">
                 <div className="flex items-center space-x-2">
                      <Button onClick={() => handleNav('prev')}>&larr;</Button>
@@ -417,10 +523,10 @@ export const CalendarView: React.FC = () => {
                 </div>
             </div>
             
-            {viewMode === 'month' && <MonthView currentDate={currentDate} openModalForNew={openModalForNew} openModalForEdit={openModalForEdit} />}
-            {(viewMode === 'week' || viewMode === 'day') && <TimelineView currentDate={currentDate} viewMode={viewMode} openModalForNew={openModalForNew} openModalForEdit={openModalForEdit} />}
+            {viewMode === 'month' && <MonthView currentDate={currentDate} draggedBookingId={draggedBookingId} openModalForNew={openModalForNew} openModalForEdit={openModalForEdit} handleDragStart={handleDragStart} handleDrop={handleDrop} />}
+            {(viewMode === 'week' || viewMode === 'day') && <TimelineView currentDate={currentDate} viewMode={viewMode} draggedBookingId={draggedBookingId} openModalForNew={openModalForNew} openModalForEdit={openModalForEdit} handleDragStart={handleDragStart} handleDrop={handleDrop} />}
 
-            <BookingModal isOpen={isBookingModalOpen} onClose={() => setIsBookingModalOpen(false)} bookingDate={selectedDate} existingBooking={selectedBooking}/>
+            <BookingModal isOpen={isBookingModalOpen} onClose={() => setIsBookingModalOpen(false)} bookingDate={selectedDate} existingBooking={selectedBooking} checkConflict={checkConflict} />
             <BlockPeriodModal isOpen={isBlockModalOpen} onClose={() => setIsBlockModalOpen(false)} />
         </div>
     );

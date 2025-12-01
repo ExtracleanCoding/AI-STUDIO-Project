@@ -2,7 +2,8 @@
 import React, { createContext, useReducer, useEffect, ReactNode } from 'react';
 // FIX: Added 'Expense' to the type import list to resolve a type error.
 import type { AppState, AppEntityKey, AppEntity, StaffType, ResourceType, ServiceType, PricingModel, BookingStatus, PaymentStatus, Booking, Transaction, ProgressNote, Expense } from '../types';
-import { LOCAL_STORAGE_KEY, DRIVING_SKILLS } from '../constants';
+// FIX: Corrected import error by removing 'DRIVING_SKILLS' which is not exported from constants and was unused.
+import { LOCAL_STORAGE_KEY } from '../constants';
 import { generateId } from '../utils';
 
 const getInitialState = (): AppState => {
@@ -136,7 +137,7 @@ const getInitialState = (): AppState => {
       geminiApiKey: '',
       emailTemplate: `Hi {customerName},\n\nThis is a confirmation for your booking on {bookingDate} at {bookingTime}.\n\nThanks,\n{businessName}`,
       smsTemplate: `Booking confirmation: {bookingDate} @ {bookingTime} with {businessName}.`,
-      googleCalendarEnabled: false,
+      googleCalendarEnabled: true,
     },
   };
 };
